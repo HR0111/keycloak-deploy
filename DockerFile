@@ -1,26 +1,27 @@
-FROM quay.io/keycloak/keycloak:22.0.1
+FROM quay.io/keycloak/keycloak:latest as builder
 
-# Set user as root for installations
-USER root
-RUN microdnf install -y curl && microdnf clean all
-USER keycloak
-
-# Copy any custom configurations  
-COPY --chown=keycloak:keycloak . /opt/keycloak/
-
-# Environment variables for build
-ENV KC_DB=postgres
-ENV KC_HOSTNAME_STRICT=false
-ENV KC_PROXY=edge
-ENV KC_HTTP_ENABLED=true
+# Enable health and metrics support
 ENV KC_HEALTH_ENABLED=true
+ENV KC_METRICS_ENABLED=true
+ENV KC_DB=postgres
 
-# Build optimized Keycloak
+WORKDIR /opt/keycloak
+
+# Build Keycloak optimized for PostgreSQL
 RUN /opt/keycloak/bin/kc.sh build
 
-# Expose the port that Render expects
-EXPOSE $PORT
+FROM quay.io/keycloak/keycloak:latest
+
+COPY --from=builder /opt/keycloak/ /opt/keycloak/
+
+# Environment variables that will be set in Render
+ENV KC_DB=postgres
+ENV KC_HOSTNAME_STRICT=false
+ENV KC_HOSTNAME_STRICT_HTTPS=false
+ENV KC_HTTP_ENABLED=true
+ENV KC_PROXY=edge
+
 EXPOSE 8080
 
 ENTRYPOINT ["/opt/keycloak/bin/kc.sh"]
-CMD ["start", "--http-port=${PORT:-8080}", "--hostname-strict=false", "--proxy=edge", "--http-enabled=true"]
+CMD ["start"]
